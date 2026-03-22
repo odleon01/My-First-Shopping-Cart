@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS Pro - Formato Cuadrícula 6x4</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb; --secondary: #64748b; --success: #16a34a;
+            --danger: #dc2626; --dark: #0f172a; --bg: #f1f5f9;
+        }
+
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); margin: 0; padding: 20px; font-size: 14px; }
+        .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 450px; gap: 20px; }
+        .card { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        
+        h2 { margin-top: 0; font-size: 0.9rem; color: var(--secondary); text-transform: uppercase; letter-spacing: 1px; }
+
+        /* BUSCADOR */
+        .search-container { position: relative; }
+        input[type="text"], input[type="file"] { padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; width: 100%; box-sizing: border-box; }
+        
+        .dropdown-list {
+            position: absolute; top: 100%; left: 0; right: 0; background: white;
+            border: 1px solid #cbd5e1; border-radius: 0 0 6px 6px;
+            box-shadow: 0 10px 15px rgba(0,0,0,0.1); z-index: 1000;
+            max-height: 250px; overflow-y: auto; display: none;
+        }
+        .drop-item { padding: 10px; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: grid; grid-template-columns: 100px 1fr 80px; }
+        .drop-item:hover { background: #eff6ff; }
+
+        /* CARRITO */
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 10px; background: #f8fafc; border-bottom: 2px solid #e2e8f0; font-size: 0.8rem; }
+        td { padding: 10px; border-bottom: 1px solid #f1f5f9; }
+
+        /* CUADRÍCULA DE SALIDA (6x4) */
+        .grid-output {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(6, 1fr);
+            gap: 5px;
+            background: #e2e8f0;
+            padding: 5px;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+        .grid-cell {
+            background: white;
+            border: 1px solid #cbd5e1;
+            padding: 8px;
+            height: 35px;
+            font-family: monospace;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #475569;
+            overflow: hidden;
+        }
+        .grid-cell.active { background: #dcfce7; border-color: #22c55e; color: #166534; font-weight: bold; }
+
+        /* BOTONES */
+        .btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 0.8rem; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-ghost { background: #e2e8f0; color: #475569; }
+
+        .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <main>
+        <div class="card">
+            <h2>Inventario</h2>
+            <input type="file" id="fileInput" accept=".xlsx, .xlsm">
+        </div>
+
+        <div class="card">
+            <h2>Buscador</h2>
+            <div class="search-container">
+                <input type="text" id="searchInput" placeholder="Buscar por nombre o SKU..." autocomplete="off">
+                <div id="dropdown" class="dropdown-list"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Carrito</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Producto</th>
+                        <th>Precio</th>
+                        <th>Cant.</th>
+                        <th>Total</th>
+                        <th>-</th>
+                    </tr>
+                </thead>
+                <tbody id="cartBody"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <aside>
+        <div class="card">
+            <div class="toolbar">
+                <h2 style="margin:0; flex:1;">Vista de SKUs (6x4)</h2>
+                <button class="btn btn-primary" onclick="pos.copiarCuadricula()">📋 Copiar</button>
+                <button class="btn btn-danger" onclick="pos.vaciarTodo()">🗑️ Vaciar</button>
+            </div>
+            
+            <div id="visualGrid" class="grid-output">
+                </div>
+
+            <div style="margin-top:20px; border-top: 1px solid #eee; padding-top:15px;">
+                <div style="display:flex; justify-content:space-between; font-size:1.2rem; font-weight:800;">
+                    <span>Total:</span>
+                    <span>$<span id="sumTotal">0.00</span></span>
+                </div>
+                <button class="btn btn-success" style="width:100%; margin-top:15px; font-size:1rem; padding:12px;" onclick="pos.finalizarVenta()">PROCESAR COMPRA</button>
+                <button class="btn btn-ghost" style="width:100%; margin-top:10px;" onclick="pos.verMovimientos()">Ver Historial</button>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<script>
+const pos = (() => {
+    let baseData = [];
+    let carrito = [];
+    let movimientos = [];
+
+    // Carga de Excel
+    document.getElementById('fileInput').addEventListener('change', (e) => {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            const wb = XLSX.read(evt.target.result, { type: 'binary' });
+            baseData = XLSX.utils.sheet_to_json(wb.Sheets['base']);
+            alert("Base cargada.");
+        };
+        reader.readAsBinaryString(e.target.files[0]);
+    });
+
+    // Buscador
+    const searchInput = document.getElementById('searchInput');
+    const dropdown = document.getElementById('dropdown');
+
+    searchInput.addEventListener('input', () => {
+        const val = searchInput.value.trim().toUpperCase();
+        if(!val) { dropdown.style.display = 'none'; return; }
+        const filtered = baseData.filter(p => p.SKU.toString().toUpperCase().includes(val) || p.NOMBRE.toUpperCase().includes(val)).slice(0, 10);
+        dropdown.innerHTML = filtered.map(p => `
+            <div class="drop-item" onclick="pos.agregar('${p.SKU}')">
+                <span>${p.SKU}</span><span>${p.NOMBRE}</span><strong>$${p['PRECIO CON DESCUENTO'] || p.PRECIO}</strong>
+            </div>
+        `).join('');
+        dropdown.style.display = filtered.length ? 'block' : 'none';
+    });
+
+    const agregar = (sku) => {
+        const p = baseData.find(x => x.SKU.toString() === sku.toString());
+        const exist = carrito.find(c => c.SKU === p.SKU);
+        if(exist) exist.cantidad++;
+        else if(carrito.length < 24) carrito.push({ ...p, cantidad: 1 });
+        else alert("Límite de 24 productos (6x4) alcanzado.");
+        
+        searchInput.value = ""; dropdown.style.display = 'none';
+        render();
+    };
+
+    const render = () => {
+        // Render Carrito
+        const body = document.getElementById('cartBody');
+        body.innerHTML = carrito.map((i, idx) => `
+            <tr>
+                <td>${i.SKU}</td>
+                <td>${i.NOMBRE}</td>
+                <td>$${(i['PRECIO CON DESCUENTO'] || i.PRECIO)}</td>
+                <td>${i.cantidad}</td>
+                <td>$${((i['PRECIO CON DESCUENTO'] || i.PRECIO) * i.cantidad).toFixed(2)}</td>
+                <td><button onclick="pos.borrar(${idx})">x</button></td>
+            </tr>
+        `).join('');
+
+        const total = carrito.reduce((acc, i) => acc + ((i['PRECIO CON DESCUENTO'] || i.PRECIO) * i.cantidad), 0);
+        document.getElementById('sumTotal').innerText = total.toFixed(2);
+
+        // Render Cuadrícula (6x4 = 24 celdas)
+        const visualGrid = document.getElementById('visualGrid');
+        visualGrid.innerHTML = "";
+        for(let n=0; n<24; n++) {
+            const item = carrito[n];
+            const cell = document.createElement('div');
+            cell.className = `grid-cell ${item ? 'active' : ''}`;
+            // Formato visual: SKU [ESPACIO] CANT
+            cell.innerText = item ? `${item.SKU} ${item.cantidad}` : "-";
+            visualGrid.appendChild(cell);
+        }
+    };
+
+    const borrar = (idx) => { carrito.splice(idx, 1); render(); };
+
+    const vaciarTodo = () => {
+        if(confirm("¿Vaciar carrito y cuadrícula?")) {
+            carrito = [];
+            render();
+        }
+    };
+
+    const copiarCuadricula = () => {
+        if(carrito.length === 0) return;
+        
+        // Generar texto: Cada 4 productos hay un salto de línea (fila)
+        // Cada producto dentro de la fila se separa por TABULAR
+        let textOutput = "";
+        for(let row = 0; row < 6; row++) {
+            let rowItems = [];
+            for(let col = 0; col < 4; col++) {
+                const index = (row * 4) + col;
+                const item = carrito[index];
+                // Formato: SKU [TAB] Cantidad
+                rowItems.push(item ? `${item.SKU}\t${item.cantidad}` : "\t"); 
+            }
+            textOutput += rowItems.join('\t') + "\n";
+        }
+
+        const tempInput = document.createElement("textarea");
+        document.body.appendChild(tempInput);
+        tempInput.value = textOutput;
+        tempInput.select();
+        document.execCommand("copy");
+        document.body.removeChild(tempInput);
+        alert("¡Estructura 6x4 copiada al portapapeles!");
+    };
+
+    const finalizarVenta = () => {
+        if(carrito.length === 0) return;
+        const fecha = new Date().toLocaleString();
+        carrito.forEach(i => movimientos.push({ ...i, fecha }));
+        alert("Venta procesada con éxito.");
+        // No vaciamos automáticamente para permitir copiar si se olvidó
+    };
+
+    return { agregar, borrar, vaciarTodo, copiarCuadricula, finalizarVenta };
+})();
+</script>
+</body>
+</html>
