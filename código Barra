@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador de Catálogos de Códigos de Barras</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --primary-hover: #1d4ed8;
+            --error-color: #dc2626;
+            --text-color: #1f2937;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --border-color: #e5e7eb;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            margin: 0;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--text-color);
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .error-box {
+            background-color: #fef2f2;
+            border: 1px solid #f87171;
+            color: var(--error-color);
+            padding: 1rem;
+            border-radius: 6px;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .error-box ul {
+            margin: 0.5rem 0 0 0;
+            padding-left: 1.5rem;
+        }
+
+        /* Tabla de Preview */
+        .table-container {
+            overflow-x: auto;
+            margin-top: 1.5rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 0.75rem;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f9fafb;
+            font-weight: 600;
+        }
+
+        /* Checkboxes */
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .checkbox-label input {
+            margin-right: 0.5rem;
+            width: 1.2rem;
+            height: 1.2rem;
+            cursor: pointer;
+        }
+
+        .info-box {
+            background-color: #eff6ff;
+            border-left: 4px solid var(--primary-color);
+            padding: 1rem;
+            margin: 1.5rem 0;
+            border-radius: 0 4px 4px 0;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Generador de Catálogos</h1>
+
+        <div class="card" id="step-1">
+            <h2>1. Cargar base de productos</h2>
+            <p>Sube un archivo CSV o XLSX que contenga las columnas obligatorias.</p>
+            
+            <input type="file" id="fileInput" accept=".csv, .xlsx" class="hidden">
+            <button class="btn" id="btnTriggerFile">Agregar archivo</button>
+
+            <div id="uploadErrors" class="error-box hidden"></div>
+            
+            <div id="previewContainer" class="hidden">
+                <h3 style="margin-top: 2rem;">Vista Previa (Primeros 5 registros)</h3>
+                <div class="table-container">
+                    <table id="previewTable">
+                        <thead></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <button class="btn" id="btnContinue" style="margin-top: 1.5rem;">Continuar a configuración</button>
+            </div>
+        </div>
+
+        <div class="card hidden" id="step-2">
+            <h2>2. Configuración del Catálogo</h2>
+            
+            <h3>Seleccionar columnas a imprimir</h3>
+            <div class="info-box">
+                <strong>Nota:</strong> El código de barras y el SKU siempre se incluirán por defecto.
+            </div>
+            <div class="checkbox-group" id="columnsCheckboxes">
+                </div>
+
+            <h3>Ordenamiento Aplicado</h3>
+            <div class="info-box">
+                <code>ORDER BY categoria ASC, subcategoria ASC, nombre ASC</code>
+            </div>
+
+            <button class="btn" id="btnGenerate">Generar catálogo de códigos de barra</button>
+        </div>
+
+        <div class="card hidden" id="step-3">
+            <h2>3. Catálogo Listo</h2>
+            <p>El procesamiento ha finalizado con éxito.</p>
+            <a id="downloadLink" href="#" target="_blank" style="text-decoration: none;">
+                <button class="btn">⬇ Descargar PDF</button>
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // --- ESTADO DE LA APLICACIÓN ---
+        const AppState = {
+            dataset: [],
+            apiUrl: '/api/catalog' // Ajusta esto según el enrutador de tu backend
+        };
+
+        // --- REFERENCIAS DOM ---
+        const fileInput = document.getElementById('fileInput');
+        const btnTriggerFile = document.getElementById('btnTriggerFile');
+        const uploadErrors = document.getElementById('uploadErrors');
+        const previewContainer = document.getElementById('previewContainer');
+        const previewTable = document.getElementById('previewTable');
+        const btnContinue = document.getElementById('btnContinue');
+        
+        const step1 = document.getElementById('step-1');
+        const step2 = document.getElementById('step-2');
+        const step3 = document.getElementById('step-3');
+        
+        const columnsCheckboxes = document.getElementById('columnsCheckboxes');
+        const btnGenerate = document.getElementById('btnGenerate');
+        const downloadLink = document.getElementById('downloadLink');
+
+        // --- EVENTOS ---
+
+        // Simular click en input file
+        btnTriggerFile.addEventListener('click', () => fileInput.click());
+
+        // Evento: Al seleccionar archivo
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Limpiar errores previos
+            uploadErrors.classList.add('hidden');
+            uploadErrors.innerHTML = '';
+            previewContainer.classList.add('hidden');
+            btnTriggerFile.disabled = true;
+            btnTriggerFile.textContent = 'Procesando...';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                // Endpoint POST /upload-file
+                const response = await fetch(`${AppState.apiUrl}/upload-file`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || (data.errors && data.errors.length > 0)) {
+                    mostrarErrores(data.errors || ['Error desconocido en el servidor']);
+                    return;
+                }
+
+                // Guardar dataset validado
+                AppState.dataset = data.dataset;
+
+                // Renderizar Preview
+                renderizarTabla(data.columns, data.preview);
+                
+                // Preparar Checkboxes para el siguiente paso
+                renderizarCheckboxes(data.columns);
+
+                previewContainer.classList.remove('hidden');
+
+            } catch (error) {
+                mostrarErrores(['Error de red al conectar con el servidor.']);
+            } finally {
+                btnTriggerFile.disabled = false;
+                btnTriggerFile.textContent = 'Cambiar archivo';
+                // Reset file input para permitir subir el mismo archivo de nuevo si se desea
+                fileInput.value = ''; 
+            }
+        });
+
+        // Evento: Continuar al paso 2
+        btnContinue.addEventListener('click', () => {
+            step1.classList.add('hidden');
+            step2.classList.remove('hidden');
+        });
+
+        // Evento: Generar Catálogo (Paso 4 y 5)
+        btnGenerate.addEventListener('click', async () => {
+            btnGenerate.disabled = true;
+            btnGenerate.textContent = 'Generando PDF (Esto puede tomar un momento)...';
+
+            // Obtener columnas seleccionadas
+            const checkboxes = document.querySelectorAll('#columnsCheckboxes input[type="checkbox"]:checked');
+            const columns_selected = Array.from(checkboxes).map(cb => cb.value);
+
+            try {
+                // Endpoint POST /generate-barcode-catalog
+                const response = await fetch(`${AppState.apiUrl}/generate-barcode-catalog`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        dataset: AppState.dataset,
+                        columns_selected: columns_selected
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Error al generar el catálogo');
+                }
+
+                // Mostrar botón de descarga
+                downloadLink.href = data.pdf_download_url;
+                step2.classList.add('hidden');
+                step3.classList.remove('hidden');
+
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            } finally {
+                btnGenerate.disabled = false;
+                btnGenerate.textContent = 'Generar catálogo de códigos de barra';
+            }
+        });
+
+        // --- FUNCIONES AUXILIARES ---
+
+        function mostrarErrores(errores) {
+            let html = '<strong>Se encontraron errores en el archivo:</strong><ul>';
+            errores.forEach(err => html += `<li>${err}</li>`);
+            html += '</ul>';
+            uploadErrors.innerHTML = html;
+            uploadErrors.classList.remove('hidden');
+        }
+
+        function renderizarTabla(columnas, filas) {
+            const thead = previewTable.querySelector('thead');
+            const tbody = previewTable.querySelector('tbody');
+            
+            thead.innerHTML = '';
+            tbody.innerHTML = '';
+
+            // Render Header
+            const trHead = document.createElement('tr');
+            columnas.forEach(col => {
+                const th = document.createElement('th');
+                th.textContent = col;
+                trHead.appendChild(th);
+            });
+            thead.appendChild(trHead);
+
+            // Render Body
+            filas.forEach(fila => {
+                const tr = document.createElement('tr');
+                columnas.forEach(col => {
+                    const td = document.createElement('td');
+                    td.textContent = fila[col] || '';
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderizarCheckboxes(columnas) {
+            columnsCheckboxes.innerHTML = '';
+            
+            // Filtrar SKU ya que siempre se imprime según requerimientos
+            const columnasOpcionales = columnas.filter(c => c !== 'SKU');
+
+            columnasOpcionales.forEach(col => {
+                const label = document.createElement('label');
+                label.className = 'checkbox-label';
+                
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.value = col;
+                input.checked = true; // Seleccionados por defecto
+
+                label.appendChild(input);
+                label.appendChild(document.createTextNode(col));
+                
+                columnsCheckboxes.appendChild(label);
+            });
+        }
+    </script>
+</body>
+</html>
