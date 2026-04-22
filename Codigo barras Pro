@@ -1,0 +1,1270 @@
+<!DOCTYPE html>
+
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CatalogoPro — Sistema de Catálogo de Productos</title>
+
+<!-- CDN: SheetJS para Excel, JsBarcode para códigos de barra -->
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
+<style>
+/* ===================================================
+   VARIABLES Y RESET
+=================================================== */
+:root {
+  --bg:        #0d0f14;
+  --surface:   #161921;
+  --surface2:  #1e2230;
+  --border:    #2a2f42;
+  --accent:    #f5c518;
+  --accent2:   #e07b39;
+  --text:      #e8eaf0;
+  --text-muted:#7a8099;
+  --success:   #4caf7d;
+  --error:     #e05555;
+  --radius:    10px;
+  --font-head: 'Georgia', serif;
+  --font-body: 'Courier New', monospace;
+  --shadow:    0 4px 24px rgba(0,0,0,0.5);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ===================================================
+   HEADER
+=================================================== */
+#app-header {
+  background: var(--surface);
+  border-bottom: 2px solid var(--accent);
+  padding: 18px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow);
+}
+
+#app-header h1 {
+  font-family: var(--font-head);
+  font-size: 22px;
+  letter-spacing: 2px;
+  color: var(--accent);
+}
+
+#app-header h1 span {
+  color: var(--accent2);
+}
+
+.header-stats {
+  display: flex;
+  gap: 24px;
+}
+
+.stat-chip {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.stat-chip strong {
+  color: var(--accent);
+  font-size: 14px;
+}
+
+/* ===================================================
+   LAYOUT PRINCIPAL
+=================================================== */
+#main-layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 0;
+  min-height: calc(100vh - 64px);
+}
+
+/* ===================================================
+   SIDEBAR (Formulario + Importar)
+=================================================== */
+#sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 24px 20px;
+  overflow-y: auto;
+}
+
+.section-title {
+  font-family: var(--font-head);
+  font-size: 13px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Formulario */
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+
+.form-group input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  font-family: var(--font-body);
+  font-size: 13px;
+  transition: border-color 0.2s;
+  outline: none;
+}
+
+.form-group input:focus {
+  border-color: var(--accent);
+}
+
+.form-group input.error {
+  border-color: var(--error);
+}
+
+.field-error {
+  color: var(--error);
+  font-size: 11px;
+  margin-top: 3px;
+  display: none;
+}
+
+.field-error.visible {
+  display: block;
+}
+
+/* Botones */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--font-body);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.18s;
+  letter-spacing: 0.5px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #000;
+  font-weight: bold;
+  width: 100%;
+  justify-content: center;
+}
+
+.btn-primary:hover { background: #ffd33a; transform: translateY(-1px); }
+
+.btn-secondary {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  width: 100%;
+  justify-content: center;
+}
+
+.btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+
+.btn-danger {
+  background: transparent;
+  color: var(--error);
+  border: 1px solid var(--error);
+  padding: 5px 10px;
+  font-size: 11px;
+}
+
+.btn-danger:hover { background: var(--error); color: #fff; }
+
+.btn-print {
+  background: var(--accent2);
+  color: #fff;
+  font-weight: bold;
+}
+
+.btn-print:hover { background: #f0923e; }
+
+.btn-clear {
+  background: transparent;
+  color: var(--error);
+  border: 1px solid var(--error);
+  width: 100%;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.btn-clear:hover { background: var(--error); color: #fff; }
+
+/* Separador */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 20px 0;
+}
+
+/* Zona de importación */
+.import-zone {
+  background: var(--surface2);
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 10px;
+}
+
+.import-zone:hover {
+  border-color: var(--accent);
+  background: #1a2035;
+}
+
+.import-zone .icon { font-size: 28px; display: block; margin-bottom: 6px; }
+.import-zone p { color: var(--text-muted); font-size: 12px; }
+.import-zone strong { color: var(--accent); }
+
+#file-input { display: none; }
+
+/* Instrucciones Excel */
+.excel-guide {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-top: 14px;
+}
+
+.excel-guide h4 {
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent2);
+  margin-bottom: 10px;
+}
+
+.excel-guide table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.excel-guide th {
+  background: var(--bg);
+  color: var(--accent);
+  padding: 4px 6px;
+  text-align: left;
+  border: 1px solid var(--border);
+}
+
+.excel-guide td {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.excel-guide .note {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+.excel-guide .note span { color: var(--accent2); }
+
+/* ===================================================
+   ÁREA DE CATÁLOGO
+=================================================== */
+#catalog-area {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+/* Toolbar búsqueda + acciones */
+#toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+#search-input {
+  flex: 1;
+  min-width: 200px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 9px 14px;
+  border-radius: var(--radius);
+  font-family: var(--font-body);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+#search-input:focus { border-color: var(--accent); }
+#search-input::placeholder { color: var(--text-muted); }
+
+/* Grid de productos */
+#product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+/* Tarjeta producto */
+.product-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.product-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(245, 197, 24, 0.1);
+}
+
+.card-image {
+  width: 100%;
+  height: 130px;
+  object-fit: contain;
+  background: var(--surface2);
+  display: block;
+}
+
+.card-image-placeholder {
+  width: 100%;
+  height: 130px;
+  background: var(--surface2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  color: var(--border);
+}
+
+.card-body {
+  padding: 12px;
+}
+
+.card-name {
+  font-family: var(--font-head);
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-sku {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.card-prices {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.price-public {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.price-socio {
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: bold;
+}
+
+.price-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  display: block;
+}
+
+.card-barcode {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
+  background: white;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.card-barcode svg {
+  max-width: 100%;
+  height: 40px;
+}
+
+.card-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* Estado vacío */
+#empty-state {
+  grid-column: 1/-1;
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+}
+
+#empty-state .empty-icon { font-size: 56px; display: block; margin-bottom: 14px; }
+#empty-state h3 { font-family: var(--font-head); font-size: 18px; color: var(--text); margin-bottom: 8px; }
+#empty-state p { font-size: 13px; }
+
+/* Toast / Feedback */
+#toast {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  padding: 12px 22px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-family: var(--font-body);
+  z-index: 9999;
+  transform: translateY(80px);
+  opacity: 0;
+  transition: all 0.3s;
+  max-width: 320px;
+}
+
+#toast.show { transform: translateY(0); opacity: 1; }
+#toast.success { background: var(--success); color: #fff; }
+#toast.error   { background: var(--error);   color: #fff; }
+#toast.info    { background: var(--accent2); color: #fff; }
+
+/* ===================================================
+   MODAL EDICIÓN
+=================================================== */
+#modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+
+#modal-overlay.active { display: flex; }
+
+#modal-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+  width: 90%;
+  max-width: 420px;
+  box-shadow: var(--shadow);
+}
+
+#modal-box h3 {
+  font-family: var(--font-head);
+  color: var(--accent);
+  margin-bottom: 20px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.modal-actions .btn { flex: 1; justify-content: center; }
+
+/* ===================================================
+   VISTA DE IMPRESIÓN
+=================================================== */
+@media screen {
+  #print-preview { display: none; }
+}
+
+@media print {
+  body > *:not(#print-preview) { display: none !important; }
+
+  #print-preview {
+    display: block !important;
+    margin: 0;
+    padding: 0;
+  }
+
+  @page {
+    size: letter portrait;
+    margin: 10mm 8mm;
+  }
+
+  .print-page {
+    width: 100%;
+    page-break-after: always;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: repeat(6, auto);
+    gap: 6mm;
+  }
+
+  .print-page:last-child {
+    page-break-after: avoid;
+  }
+
+  .print-item {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 6px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: Arial, sans-serif;
+    font-size: 9px;
+  }
+
+  .print-item img.prod-img {
+    width: auto;
+    height: 55px;
+    object-fit: contain;
+    margin-bottom: 4px;
+  }
+
+  .print-item .print-name {
+    font-weight: bold;
+    font-size: 10px;
+    text-align: center;
+    margin-bottom: 2px;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .print-item .print-sku {
+    color: #666;
+    font-size: 8px;
+    margin-bottom: 4px;
+  }
+
+  .print-prices {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+
+  .print-price-block { text-align: center; }
+  .print-price-label { font-size: 7px; color: #888; display: block; }
+  .print-price-val { font-size: 10px; font-weight: bold; }
+  .print-price-val.socio { color: #c07000; }
+
+  .print-barcode svg {
+    width: 100%;
+    height: 32px;
+    max-width: 160px;
+  }
+}
+
+/* ===================================================
+   RESPONSIVE
+=================================================== */
+@media (max-width: 820px) {
+  #main-layout { grid-template-columns: 1fr; }
+  #sidebar { border-right: none; border-bottom: 1px solid var(--border); }
+}
+</style>
+
+</head>
+<body>
+
+<!-- ============ HEADER ============ -->
+
+<header id="app-header">
+  <h1>CATÁLOGO<span>PRO</span></h1>
+  <div class="header-stats">
+    <div class="stat-chip">Productos: <strong id="stat-total">0</strong></div>
+    <div class="stat-chip">Filtrados: <strong id="stat-filtered">0</strong></div>
+  </div>
+</header>
+
+<!-- ============ LAYOUT ============ -->
+
+<div id="main-layout">
+
+  <!-- === SIDEBAR === -->
+
+  <aside id="sidebar">
+
+```
+<!-- Formulario -->
+<p class="section-title">➕ Nuevo Producto</p>
+
+<div class="form-group">
+  <label>Nombre del producto *</label>
+  <input type="text" id="f-nombre" placeholder="Ej: Camiseta Polo">
+  <span class="field-error" id="err-nombre">Campo obligatorio</span>
+</div>
+<div class="form-group">
+  <label>SKU *</label>
+  <input type="text" id="f-sku" placeholder="Ej: CAM-001">
+  <span class="field-error" id="err-sku">Campo obligatorio</span>
+</div>
+<div class="form-group">
+  <label>Precio Público *</label>
+  <input type="number" id="f-precio-pub" placeholder="0.00" min="0" step="0.01">
+  <span class="field-error" id="err-precio-pub">Ingrese un precio válido</span>
+</div>
+<div class="form-group">
+  <label>Precio Socio *</label>
+  <input type="number" id="f-precio-socio" placeholder="0.00" min="0" step="0.01">
+  <span class="field-error" id="err-precio-socio">Ingrese un precio válido</span>
+</div>
+<div class="form-group">
+  <label>Código de Barras *</label>
+  <input type="text" id="f-barcode" placeholder="Ej: 7501234567890">
+  <span class="field-error" id="err-barcode">Campo obligatorio (solo letras/números)</span>
+</div>
+<div class="form-group">
+  <label>Imagen (URL o base64)</label>
+  <input type="text" id="f-imagen" placeholder="https://... o vacío">
+</div>
+
+<button class="btn btn-primary" onclick="addProduct()">✚ AGREGAR PRODUCTO</button>
+<button class="btn btn-clear" onclick="clearAll()">🗑 Limpiar todo</button>
+
+<hr class="divider">
+
+<!-- Importar Excel -->
+<p class="section-title">📥 Importar Excel / CSV</p>
+
+<div class="import-zone" onclick="document.getElementById('file-input').click()">
+  <span class="icon">📊</span>
+  <p><strong>Click aquí</strong> para seleccionar<br>un archivo .xlsx o .csv</p>
+</div>
+<input type="file" id="file-input" accept=".xlsx,.xls,.csv" onchange="importFile(event)">
+
+<button class="btn btn-secondary" onclick="document.getElementById('file-input').click()">
+  📂 Seleccionar archivo
+</button>
+
+<!-- Guía formato Excel -->
+<div class="excel-guide">
+  <h4>📋 Formato del archivo Excel</h4>
+  <p style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">La primera fila debe ser el encabezado con estas columnas:</p>
+  <table>
+    <tr>
+      <th>Columna</th>
+      <th>Tipo</th>
+    </tr>
+    <tr><td>nombre</td><td>texto</td></tr>
+    <tr><td>sku</td><td>texto</td></tr>
+    <tr><td>precio_publico</td><td>número</td></tr>
+    <tr><td>precio_socio</td><td>número</td></tr>
+    <tr><td>codigo_barras</td><td>texto *</td></tr>
+    <tr><td>imagen</td><td>URL (opcional)</td></tr>
+  </table>
+  <p class="note">
+    <span>⚠ IMPORTANTE:</span> "codigo_barras" debe ser texto (formato celda = Texto) para evitar pérdida de ceros iniciales.<br>
+    La columna "imagen" puede estar vacía.
+  </p>
+</div>
+
+<hr class="divider">
+
+<!-- Imprimir -->
+<p class="section-title">🖨 Catálogo</p>
+<button class="btn btn-print btn-secondary" onclick="printCatalog()">🖨 IMPRIMIR CATÁLOGO</button>
+```
+
+  </aside>
+
+  <!-- === CATÁLOGO === -->
+
+  <main id="catalog-area">
+
+```
+<!-- Toolbar -->
+<div id="toolbar">
+  <input type="text" id="search-input" placeholder="🔍  Buscar por nombre o SKU..." oninput="filterProducts()">
+  <button class="btn btn-secondary" onclick="filterProducts()">Buscar</button>
+</div>
+
+<!-- Grid -->
+<div id="product-grid">
+  <div id="empty-state">
+    <span class="empty-icon">📦</span>
+    <h3>Sin productos aún</h3>
+    <p>Agrega productos con el formulario o importa desde Excel.</p>
+  </div>
+</div>
+```
+
+  </main>
+</div>
+
+<!-- ============ MODAL EDICIÓN ============ -->
+
+<div id="modal-overlay" onclick="closeModal(event)">
+  <div id="modal-box">
+    <h3>✏️ Editar Producto</h3>
+    <input type="hidden" id="m-id">
+    <div class="form-group">
+      <label>Nombre</label>
+      <input type="text" id="m-nombre">
+    </div>
+    <div class="form-group">
+      <label>SKU</label>
+      <input type="text" id="m-sku">
+    </div>
+    <div class="form-group">
+      <label>Precio Público</label>
+      <input type="number" id="m-precio-pub">
+    </div>
+    <div class="form-group">
+      <label>Precio Socio</label>
+      <input type="number" id="m-precio-socio">
+    </div>
+    <div class="form-group">
+      <label>Código de Barras</label>
+      <input type="text" id="m-barcode">
+    </div>
+    <div class="form-group">
+      <label>Imagen (URL)</label>
+      <input type="text" id="m-imagen">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveEdit()">💾 Guardar</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('modal-overlay').classList.remove('active')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TOAST ============ -->
+
+<div id="toast"></div>
+
+<!-- ============ VISTA IMPRESIÓN ============ -->
+
+<div id="print-preview"></div>
+
+<!-- ============================================================
+     JAVASCRIPT
+============================================================ -->
+
+<script>
+/* --------------------------------------------------------
+   ESTADO GLOBAL
+-------------------------------------------------------- */
+let products = [];  // Array de productos en memoria
+let nextId = 1;     // ID autoincremental
+
+/* --------------------------------------------------------
+   PERSISTENCIA (localStorage)
+-------------------------------------------------------- */
+function saveToStorage() {
+  try {
+    localStorage.setItem('catalogopro_products', JSON.stringify(products));
+    localStorage.setItem('catalogopro_nextid', nextId);
+  } catch(e) {
+    console.warn('No se pudo guardar en localStorage:', e);
+  }
+}
+
+function loadFromStorage() {
+  try {
+    const data = localStorage.getItem('catalogopro_products');
+    const id   = localStorage.getItem('catalogopro_nextid');
+    if (data) products = JSON.parse(data);
+    if (id)   nextId   = parseInt(id);
+  } catch(e) {
+    products = [];
+    nextId = 1;
+  }
+}
+
+/* --------------------------------------------------------
+   TOAST (feedback)
+-------------------------------------------------------- */
+let toastTimer;
+function showToast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+/* --------------------------------------------------------
+   VALIDACIÓN
+-------------------------------------------------------- */
+function validateForm(prefix) {
+  const fields = {
+    nombre:      { id: `${prefix}-nombre`,       errId: `err-${prefix === 'f' ? '' : ''}nombre` },
+    sku:         { id: `${prefix}-sku`,           errId: 'err-sku' },
+    'precio-pub':  { id: `${prefix}-precio-pub`,  errId: 'err-precio-pub' },
+    'precio-socio':{ id: `${prefix}-precio-socio`,errId: 'err-precio-socio' },
+    barcode:     { id: `${prefix}-barcode`,       errId: 'err-barcode' },
+  };
+
+  let valid = true;
+
+  // Solo para el formulario principal
+  if (prefix === 'f') {
+    const checks = [
+      { el: document.getElementById('f-nombre'),      err: document.getElementById('err-nombre'),      test: v => v.trim().length > 0 },
+      { el: document.getElementById('f-sku'),         err: document.getElementById('err-sku'),         test: v => v.trim().length > 0 },
+      { el: document.getElementById('f-precio-pub'),  err: document.getElementById('err-precio-pub'),  test: v => v !== '' && parseFloat(v) >= 0 },
+      { el: document.getElementById('f-precio-socio'),err: document.getElementById('err-precio-socio'),test: v => v !== '' && parseFloat(v) >= 0 },
+      { el: document.getElementById('f-barcode'),     err: document.getElementById('err-barcode'),     test: v => v.trim().length > 0 && /^[A-Za-z0-9\-\s]+$/.test(v.trim()) },
+    ];
+    checks.forEach(c => {
+      const ok = c.test(c.el.value);
+      c.el.classList.toggle('error', !ok);
+      c.err.classList.toggle('visible', !ok);
+      if (!ok) valid = false;
+    });
+  }
+
+  return valid;
+}
+
+/* --------------------------------------------------------
+   AGREGAR PRODUCTO (formulario manual)
+-------------------------------------------------------- */
+function addProduct() {
+  if (!validateForm('f')) return;
+
+  const product = {
+    id:          nextId++,
+    nombre:      document.getElementById('f-nombre').value.trim(),
+    sku:         document.getElementById('f-sku').value.trim(),
+    precioPub:   parseFloat(document.getElementById('f-precio-pub').value),
+    precioSocio: parseFloat(document.getElementById('f-precio-socio').value),
+    barcode:     document.getElementById('f-barcode').value.trim(),
+    imagen:      document.getElementById('f-imagen').value.trim(),
+  };
+
+  products.push(product);
+  saveToStorage();
+  renderCatalog();
+  clearForm();
+  showToast(`✔ "${product.nombre}" agregado`, 'success');
+}
+
+function clearForm() {
+  ['f-nombre','f-sku','f-precio-pub','f-precio-socio','f-barcode','f-imagen'].forEach(id => {
+    document.getElementById(id).value = '';
+    document.getElementById(id).classList.remove('error');
+  });
+  ['err-nombre','err-sku','err-precio-pub','err-precio-socio','err-barcode'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('visible');
+  });
+}
+
+/* --------------------------------------------------------
+   ELIMINAR PRODUCTO
+-------------------------------------------------------- */
+function deleteProduct(id) {
+  products = products.filter(p => p.id !== id);
+  saveToStorage();
+  renderCatalog();
+  showToast('Producto eliminado', 'info');
+}
+
+/* --------------------------------------------------------
+   EDITAR PRODUCTO (abrir modal)
+-------------------------------------------------------- */
+function editProduct(id) {
+  const p = products.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('m-id').value           = p.id;
+  document.getElementById('m-nombre').value        = p.nombre;
+  document.getElementById('m-sku').value           = p.sku;
+  document.getElementById('m-precio-pub').value    = p.precioPub;
+  document.getElementById('m-precio-socio').value  = p.precioSocio;
+  document.getElementById('m-barcode').value       = p.barcode;
+  document.getElementById('m-imagen').value        = p.imagen || '';
+  document.getElementById('modal-overlay').classList.add('active');
+}
+
+function closeModal(e) {
+  if (e.target.id === 'modal-overlay') {
+    document.getElementById('modal-overlay').classList.remove('active');
+  }
+}
+
+function saveEdit() {
+  const id = parseInt(document.getElementById('m-id').value);
+  const idx = products.findIndex(p => p.id === id);
+  if (idx === -1) return;
+
+  products[idx] = {
+    id,
+    nombre:      document.getElementById('m-nombre').value.trim(),
+    sku:         document.getElementById('m-sku').value.trim(),
+    precioPub:   parseFloat(document.getElementById('m-precio-pub').value),
+    precioSocio: parseFloat(document.getElementById('m-precio-socio').value),
+    barcode:     document.getElementById('m-barcode').value.trim(),
+    imagen:      document.getElementById('m-imagen').value.trim(),
+  };
+
+  saveToStorage();
+  renderCatalog();
+  document.getElementById('modal-overlay').classList.remove('active');
+  showToast('✔ Producto actualizado', 'success');
+}
+
+/* --------------------------------------------------------
+   IMPORTAR EXCEL / CSV
+-------------------------------------------------------- */
+function importFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const ext = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+
+  reader.onload = function(e) {
+    try {
+      let rows = [];
+
+      if (ext === 'csv') {
+        // Parsear CSV simple
+        const text = e.target.result;
+        rows = parseCSV(text);
+      } else {
+        // Parsear XLSX con SheetJS
+        const data = new Uint8Array(e.target.result);
+        const wb   = XLSX.read(data, { type: 'array', cellText: true, raw: false });
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        rows       = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
+      }
+
+      if (!rows || rows.length === 0) {
+        showToast('El archivo está vacío', 'error');
+        return;
+      }
+
+      // Verificar columnas obligatorias
+      const required = ['nombre','sku','precio_publico','precio_socio','codigo_barras'];
+      const headers = Object.keys(rows[0]).map(h => h.toLowerCase().trim());
+      const missing = required.filter(r => !headers.includes(r));
+
+      if (missing.length > 0) {
+        showToast(`Columnas faltantes: ${missing.join(', ')}`, 'error');
+        return;
+      }
+
+      let added = 0, skipped = 0;
+
+      rows.forEach(row => {
+        // Normalizar claves (case insensitive)
+        const r = {};
+        Object.keys(row).forEach(k => { r[k.toLowerCase().trim()] = row[k]; });
+
+        const nombre   = String(r['nombre'] || '').trim();
+        const sku      = String(r['sku'] || '').trim();
+        const pPub     = parseFloat(r['precio_publico']) || 0;
+        const pSocio   = parseFloat(r['precio_socio']) || 0;
+        const barcode  = String(r['codigo_barras'] || '').trim();
+        const imagen   = String(r['imagen'] || '').trim();
+
+        // Validar mínimos
+        if (!nombre || !sku || !barcode) { skipped++; return; }
+        // Validar barcode (solo alfanumérico)
+        if (!/^[A-Za-z0-9\-\s]+$/.test(barcode)) { skipped++; return; }
+
+        products.push({ id: nextId++, nombre, sku, precioPub: pPub, precioSocio: pSocio, barcode, imagen });
+        added++;
+      });
+
+      saveToStorage();
+      renderCatalog();
+      showToast(`✔ ${added} producto(s) importado(s)${skipped > 0 ? `, ${skipped} omitido(s)` : ''}`, 'success');
+
+    } catch(err) {
+      console.error(err);
+      showToast('Error al procesar el archivo. Revisa el formato.', 'error');
+    }
+  };
+
+  if (ext === 'csv') {
+    reader.readAsText(file, 'UTF-8');
+  } else {
+    reader.readAsArrayBuffer(file);
+  }
+
+  // Resetear input para poder importar el mismo archivo otra vez
+  event.target.value = '';
+}
+
+/* Parseador CSV manual simple */
+function parseCSV(text) {
+  const lines = text.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.replace(/"/g,'').trim().toLowerCase());
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const vals = lines[i].split(',').map(v => v.replace(/"/g,'').trim());
+    const obj = {};
+    headers.forEach((h, idx) => { obj[h] = vals[idx] || ''; });
+    rows.push(obj);
+  }
+  return rows;
+}
+
+/* --------------------------------------------------------
+   LIMPIAR TODO
+-------------------------------------------------------- */
+function clearAll() {
+  if (!confirm('¿Eliminar todos los productos? Esta acción no se puede deshacer.')) return;
+  products = [];
+  saveToStorage();
+  renderCatalog();
+  showToast('Catálogo limpiado', 'info');
+}
+
+/* --------------------------------------------------------
+   BUSCAR / FILTRAR
+-------------------------------------------------------- */
+function getFilteredProducts() {
+  const q = (document.getElementById('search-input').value || '').toLowerCase().trim();
+  if (!q) return products;
+  return products.filter(p =>
+    p.nombre.toLowerCase().includes(q) ||
+    p.sku.toLowerCase().includes(q)
+  );
+}
+
+function filterProducts() {
+  renderCatalog();
+}
+
+/* --------------------------------------------------------
+   RENDERIZAR CATÁLOGO
+-------------------------------------------------------- */
+function renderCatalog() {
+  const grid = document.getElementById('product-grid');
+  const filtered = getFilteredProducts();
+
+  // Estadísticas
+  document.getElementById('stat-total').textContent    = products.length;
+  document.getElementById('stat-filtered').textContent = filtered.length;
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `
+      <div id="empty-state">
+        <span class="empty-icon">${products.length === 0 ? '📦' : '🔍'}</span>
+        <h3>${products.length === 0 ? 'Sin productos aún' : 'Sin resultados'}</h3>
+        <p>${products.length === 0 ? 'Agrega productos con el formulario o importa desde Excel.' : 'Prueba con otro término de búsqueda.'}</p>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(p => `
+    <div class="product-card" data-id="${p.id}">
+      ${p.imagen
+        ? `<img class="card-image" src="${escapeHtml(p.imagen)}" alt="${escapeHtml(p.nombre)}" onerror="this.style.display='none';this.nextSibling.style.display='flex'">`
+        : ''
+      }
+      <div class="card-image-placeholder" ${p.imagen ? 'style="display:none"' : ''}>📦</div>
+      <div class="card-body">
+        <div class="card-name" title="${escapeHtml(p.nombre)}">${escapeHtml(p.nombre)}</div>
+        <div class="card-sku">SKU: ${escapeHtml(p.sku)}</div>
+        <div class="card-prices">
+          <div>
+            <span class="price-label">Público</span>
+            <span class="price-public">$${formatPrice(p.precioPub)}</span>
+          </div>
+          <div>
+            <span class="price-label">Socio</span>
+            <span class="price-socio">$${formatPrice(p.precioSocio)}</span>
+          </div>
+        </div>
+        <div class="card-barcode">
+          <svg id="bc-${p.id}"></svg>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-secondary" style="flex:1;font-size:11px;padding:5px" onclick="editProduct(${p.id})">✏️ Editar</button>
+          <button class="btn btn-danger" onclick="deleteProduct(${p.id})">🗑</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  // Generar códigos de barra después de insertar el HTML
+  filtered.forEach(p => {
+    try {
+      JsBarcode(`#bc-${p.id}`, p.barcode, {
+        format:      'CODE128',
+        width:       1.4,
+        height:      35,
+        displayValue: false,
+        margin:      2,
+        background:  '#ffffff',
+        lineColor:   '#000000',
+      });
+    } catch(e) {
+      // Si el código es inválido para CODE128, mostrar texto
+      const el = document.getElementById(`bc-${p.id}`);
+      if (el) el.outerHTML = `<span style="font-size:10px;color:#888;padding:4px">⚠ Código inválido</span>`;
+    }
+  });
+}
+
+/* --------------------------------------------------------
+   IMPRIMIR CATÁLOGO
+-------------------------------------------------------- */
+function printCatalog() {
+  const filtered = getFilteredProducts();
+
+  if (filtered.length === 0) {
+    showToast('No hay productos para imprimir', 'info');
+    return;
+  }
+
+  const preview = document.getElementById('print-preview');
+  preview.innerHTML = '';
+
+  // Chunk en páginas de 12 (6 filas x 2 columnas)
+  const pages = chunkArray(filtered, 12);
+
+  pages.forEach(page => {
+    const pageDiv = document.createElement('div');
+    pageDiv.className = 'print-page';
+
+    page.forEach(p => {
+      const item = document.createElement('div');
+      item.className = 'print-item';
+
+      let barcodeHTML = '';
+      try {
+        // Crear SVG temporal para el barcode
+        const tempSvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+        tempSvg.id = `pbc-${p.id}`;
+        document.body.appendChild(tempSvg);
+        JsBarcode(`#pbc-${p.id}`, p.barcode, {
+          format: 'CODE128', width: 1.2, height: 28,
+          displayValue: false, margin: 2,
+          background: '#ffffff', lineColor: '#000000'
+        });
+        barcodeHTML = `<div class="print-barcode">${tempSvg.outerHTML}</div>`;
+        document.body.removeChild(tempSvg);
+      } catch(e) {
+        barcodeHTML = `<div class="print-barcode"><span style="font-size:8px;color:#888">Cód: ${escapeHtml(p.barcode)}</span></div>`;
+      }
+
+      item.innerHTML = `
+        ${p.imagen ? `<img class="prod-img" src="${escapeHtml(p.imagen)}" alt="">` : ''}
+        <div class="print-name">${escapeHtml(p.nombre)}</div>
+        <div class="print-sku">SKU: ${escapeHtml(p.sku)}</div>
+        <div class="print-prices">
+          <div class="print-price-block">
+            <span class="print-price-label">Precio Público</span>
+            <span class="print-price-val">$${formatPrice(p.precioPub)}</span>
+          </div>
+          <div class="print-price-block">
+            <span class="print-price-label">Precio Socio</span>
+            <span class="print-price-val socio">$${formatPrice(p.precioSocio)}</span>
+          </div>
+        </div>
+        ${barcodeHTML}
+      `;
+      pageDiv.appendChild(item);
+    });
+
+    preview.appendChild(pageDiv);
+  });
+
+  window.print();
+}
+
+/* --------------------------------------------------------
+   UTILIDADES
+-------------------------------------------------------- */
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+function formatPrice(n) {
+  const num = parseFloat(n) || 0;
+  return num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+function chunkArray(arr, size) {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
+
+/* --------------------------------------------------------
+   INIT
+-------------------------------------------------------- */
+document.addEventListener('DOMContentLoaded', () => {
+  loadFromStorage();
+  renderCatalog();
+
+  // Permitir Enter en campos del formulario para agregar
+  ['f-nombre','f-sku','f-precio-pub','f-precio-socio','f-barcode','f-imagen'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') addProduct();
+    });
+  });
+
+  if (products.length > 0) {
+    showToast(`${products.length} producto(s) cargados desde sesión anterior`, 'info');
+  }
+});
+</script>
+
+</body>
+</html>
